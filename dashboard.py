@@ -12,11 +12,12 @@ def fig_json(fig):
 def tlink(t):
     return f"<a href='#' class='tl' data-t='{t}'><b>{t}</b></a>"
 
-def ranking_html(results):
+def ranking_html(results, names=None):
+    names = names or {}
     rows = []
     for i, r in enumerate(results, 1):
         t0, t5 = r["tests"][0], r["tests"][5]
-        rows.append([(i, ""), (tlink(r["ticker"]), ""),
+        rows.append([(i, ""), (tlink(r["ticker"]), ""), (names.get(r["ticker"], ""), "font-size:12px"),
                      (f"<b>{r['n_flags']}</b>", f"background:{'#f6c9c9' if r['n_flags']>=7 else '#fbe7c6' if r['n_flags']>=4 else '#eee'}"),
                      (r["n_turn"], ""), (f"{r['avg_pctile']:.0f}", f"background:{pct_color(r['avg_pctile'])}"), (tier(r), ""),
                      (" ".join(x["id"] for x in r["tests"] if x["flag"]) or "—", "font-family:monospace"), (f"{r['price']:.2f}", ""),
@@ -24,7 +25,7 @@ def ranking_html(results):
                      (f"{t0['cur']:.0f} <small>({t0['pctile']:.0f}th)</small>", f"background:{pct_color(t0['pctile'])}"),
                      (f"{t5['cur']:.0f} <small>({t5['pctile']:.0f}th)</small>", f"background:{pct_color(t5['pctile'])}")])
     return ("<p class='hint'>Click any ticker to drill into its detail. Avg pctile = mean of the 10 indicator percentiles (lower = more extreme vs own history).</p>" +
-            table_html(["#", "Ticker", "Flags /10", "Turn /4", "Avg pctile", "Tier", "Flags firing", "Price", "DD 1-yr", "DD ATH", "RSI-D (pctile)", "RSI-W (pctile)"], rows) +
+            table_html(["#", "Ticker", "Name", "Flags /10", "Turn /4", "Avg pctile", "Tier", "Flags firing", "Price", "DD 1-yr", "DD ATH", "RSI-D (pctile)", "RSI-W (pctile)"], rows) +
             "<div id='fig-flags' class='fig'></div>")
 
 def methodology_html(results):

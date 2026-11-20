@@ -40,6 +40,15 @@ def eps_str(r):
 
 
 # ----------------------------------------------------------------------------- combined ranking
+# names for tickers that have no IBES/Refinitiv row anywhere (indices, un-covered single names)
+NAMES = {"SPX": "S&P 500 index", "NDX": "Nasdaq-100 index", "COMP": "Nasdaq Composite index", "DJI": "Dow Jones Industrial Average",
+         "PL": "Planet Labs PBC", "TEAM": "Atlassian Corp", "JPM": "JPMorgan Chase & Co"}
+
+
+def name_of(t, r=None):
+    return (r or {}).get("company") or NAMES.get(t, "")
+
+
 def combined_rows(pf, rk_rows, scan):
     """Merge price-target rows and oversold results; compute both ranks and the combined order."""
     tickers = pf["tickers"]
@@ -80,7 +89,7 @@ def combined_html(pf, rows, n_up, n_os, asof):
         st_style = ("background:#eee" if not r or r["tier"] == 2 else "background:#ddd;color:#555" if r["anomaly"] else "background:#fbe7c6" if r["demoted"] else "background:#dff0d8")
         if r and r.get("source_pf"): drv_full += f" [report from {r['source_pf']} portfolio]"; st += f" <small>({r['source_pf']})</small>"
         body.append([
-            (x["c_rank"] if x["both"] else "—", "font-weight:bold"), (tl(t), ""), (esc((r or {}).get("company") or "", 24), "font-size:12px"),
+            (x["c_rank"] if x["both"] else "—", "font-weight:bold"), (tl(t), ""), (esc(name_of(t, r), 28), "font-size:12px"),
             (x.get("up_rank") or "n/r", f"background:{'#d9ead3' if x.get('up_rank') and x['up_rank'] <= max(3, n_up // 4) else ''}"),
             (x.get("os_rank") or "n/a", f"background:{'#f6c9c9' if x.get('os_rank') and x['os_rank'] <= max(3, n_os // 4) else ''}"),
             (f"{px} → {tgt}", "white-space:nowrap"), (pc(up), up_col(up) + ";font-weight:600"), (pc(bear), up_col(bear) if bear is not None else ""),
@@ -211,7 +220,8 @@ def portfolio_variant(pf, tickers, rk_rows, scan, asof, failed):
     v = {"order": [r["ticker"] for r in res], "combined": combined_html(sub, rows, n_up, n_os, asof), "targets": targets_html(sub, rows, asof, missing),
          "figs": {"scatter": fj(fig_scatter(rows, f"{pf['name']} — upside to end-2027 target vs oversold depth"))}}
     if res:
-        v["ranking"] = d1.ranking_html(res) + (f"<p class='hint'>No Yahoo price history for: {', '.join(missing)}.</p>" if missing else "")
+        names = {x["ticker"]: name_of(x["ticker"], x["rk"]) for x in rows}
+        v["ranking"] = d1.ranking_html(res, names) + (f"<p class='hint'>No Yahoo price history for: {', '.join(missing)}.</p>" if missing else "")
         v["figs"]["heat"] = fj(fig_heatmap(res)); v["figs"]["flags"] = fj(fig_flags(res))
         v["method"] = d1.methodology_html(res)
     else:
