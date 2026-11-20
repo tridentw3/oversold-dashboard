@@ -315,7 +315,7 @@ const SUBS = {readings:'Readings', charts:'Charts', history:'Episode history', l
 let S = {pf:'tipranks', tab:'portfolios', ticker:null, sub:'readings', noai:false}; let stack=[]; const drawn={}; const P={}, ST={};
 const $ = id=>document.getElementById(id);
 function plot(id, fig){ const el=$(id); if(!el||!fig) return null; Plotly.react(el, fig.data, fig.layout, {displaylogo:false, responsive:true}); return el; }
-async function fetchJ(u){ $('loading').style.display='block'; try{ const r=await fetch(u); if(!r.ok) throw new Error(u); return await r.json(); } finally{ $('loading').style.display='none'; } }
+async function fetchJ(u){ $('loading').style.display='block'; try{ const r=await fetch(u+(u.includes('?')?'&':'?')+'v='+encodeURIComponent(META.build), {cache:'no-cache'}); if(!r.ok) throw new Error(u); return await r.json(); } finally{ $('loading').style.display='none'; } }
 async function pf(){ if(!P[S.pf]) P[S.pf]=await fetchJ(`data/p/${S.pf}.json`); return P[S.pf]; }
 async function stock(t){ if(!ST[t]) { try{ ST[t]=await fetchJ(`data/s/${t}.json`); } catch(e){ ST[t]=null; } } return ST[t]; }
 function variant(p){ return (S.noai && p.variants.noai) ? p.variants.noai : p.variants.all; }
@@ -380,7 +380,8 @@ function fromHash(){ const h=decodeURIComponent(location.hash.replace('#','')); 
   if(META.portfolios.some(x=>x.id===p[0])){ S.pf=p[0]; S.tab=TABS[p[1]]?p[1]:'combined'; if(p[1]==='stock'){ S.ticker=p[2]||null; S.sub=SUBS[p[3]]?p[3]:'readings'; } S.noai=q==='noai'; } }
 window.addEventListener('hashchange', ()=>{ if(location.hash!==lastHash){ fromHash(); render(); } });
 """
-    doc = f"""<!doctype html><html><head><meta charset='utf-8'><title>Stock Portfolios — Oversold × Price-Target Dashboard</title><style>{css}</style><script src='plotly.min.js'></script></head><body>
+    build_id = datetime.now().strftime("%Y%m%d%H%M%S")
+    doc = f"""<!doctype html><html><head><meta charset='utf-8'><meta http-equiv='Cache-Control' content='no-cache'><title>Stock Portfolios — Oversold × Price-Target Dashboard</title><style>{css}</style><script src='plotly.min.js'></script></head><body>
 <header><h1>Oversold × Price-target dashboard</h1><label>Portfolio <select id='pfsel'></select></label><span class='meta'>Prices as of {asof} · built {datetime.now():%Y-%m-%d %H:%M} ET · Yahoo Finance + IBES/Refinitiv consensus · today's bars intraday/partial</span></header>
 <nav class='tabs'><button data-tab='portfolios'>1 · Portfolios</button><button data-tab='combined'>2 · Combined ranking</button><button data-tab='targets'>3 · Price targets</button><button data-tab='ranking'>4 · Oversold ranking</button><button data-tab='heat'>5 · Heat-map</button><button data-tab='stock'>6 · Stock detail</button><button data-tab='method'>7 · Methodology</button></nav>
 <div class='wrap'>
@@ -402,7 +403,7 @@ window.addEventListener('hashchange', ()=>{ if(location.hash!==lastHash){ fromHa
 <li><b>Prices</b>: every ticker re-priced with the latest Yahoo quote; consensus estimates remain as of the report dates (Oct 22 – Nov 6, 2026). Stock splits after the report date are adjusted (SNDK 8:1); HK-line reports (BABA, TCOM) keep their report price because EPS is in local currency.</li>
 <li><b>AI chip / infrastructure filter</b>: semis & semi-cap, memory, AI servers / networking / optics, data-centre power, cooling & REITs, neoclouds / miners-turned-hosts. Hyperscalers and software users of AI are <i>not</i> tagged. Toggling re-ranks the remaining names.</li></ul>
 <div id='method-body'></div></div>
-</div><script>{js.replace('__META__', json.dumps({'portfolios': meta, 'membership': json.load(open(os.path.join(SITE,'data/portfolios.json')))['membership']}).replace('</', '<\\/'))}</script></body></html>"""
+</div><script>{js.replace('__META__', json.dumps({'build': build_id, 'portfolios': meta, 'membership': json.load(open(os.path.join(SITE,'data/portfolios.json')))['membership']}).replace('</', '<\\/'))}</script></body></html>"""
     with open(os.path.join(SITE, "index.html"), "w", encoding="utf-8") as f: f.write(doc)
 
 
