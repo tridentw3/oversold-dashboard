@@ -84,7 +84,7 @@ def combined_html(pf, rows, n_up, n_os, asof):
             drv = esc(r.get("driver") or r.get("haircut_reason") or "", 110)
             drv_full = H.escape((r.get("driver") or "") + ((" | Haircut: " + r["haircut_reason"]) if r.get("haircut_reason") else ""))
         else:
-            px = f"{s['price']:,.2f}" if s else "—"; tgt = up = bear = None; exitpe = "—"; drv = "no IBES/Refinitiv report in this portfolio"; drv_full = drv
+            px = f"{s['price']:,.2f}" if s else "—"; tgt = up = bear = None; exitpe = "—"; drv = "no IBES/Refinitiv report for this name (index or uncovered)"; drv_full = drv
         st = status(r) if r else "no report"
         st_style = ("background:#eee" if not r or r["tier"] == 2 else "background:#ddd;color:#555" if r["anomaly"] else "background:#fbe7c6" if r["demoted"] else "background:#dff0d8")
         if r and r.get("source_pf"): drv_full += f" [report from {r['source_pf']} portfolio]"; st += f" <small>({r['source_pf']})</small>"
@@ -92,7 +92,7 @@ def combined_html(pf, rows, n_up, n_os, asof):
             (x["c_rank"] if x["both"] else "—", "font-weight:bold"), (tl(t), ""), (esc(name_of(t, r), 28), "font-size:12px"),
             (x.get("up_rank") or "n/r", f"background:{'#d9ead3' if x.get('up_rank') and x['up_rank'] <= max(3, n_up // 4) else ''}"),
             (x.get("os_rank") or "n/a", f"background:{'#f6c9c9' if x.get('os_rank') and x['os_rank'] <= max(3, n_os // 4) else ''}"),
-            (f"{px} → {tgt}", "white-space:nowrap"), (pc(up), up_col(up) + ";font-weight:600"), (pc(bear), up_col(bear) if bear is not None else ""),
+            (f"{px} → {tgt}" if r else px, "white-space:nowrap"), (pc(up), up_col(up) + ";font-weight:600"), (pc(bear), up_col(bear) if bear is not None else ""),
             (f"<b>{s['n_flags']}</b> · ↑{s['n_turn']}" if s else "—", f"white-space:nowrap;background:{'#f6c9c9' if s and s['n_flags'] >= 7 else '#fbe7c6' if s and s['n_flags'] >= 4 else '#eee'}"),
             (f"{s['avg_pctile']:.0f}" if s else "—", f"background:{pct_color(s['avg_pctile'])}" if s else ""),
             (st, st_style + ";font-size:12px;white-space:nowrap"), (f"<span title='{drv_full}'>{drv}</span>", "font-size:12px;min-width:360px")])
