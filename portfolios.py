@@ -36,7 +36,7 @@ AI_INFRA = {
     "SKHY", "SNDK", "STX", "TT", "VST", "WDC",
 }
 # Yahoo symbols that differ from the report ticker
-YSYM = {"SKHY": "000660.KS", "IFNNY": "IFNNY", "FWONK": "FWONK", "BABA": "BABA"}
+YSYM = {"SKHY": "000660.KS", "IFNNY": "IFNNY", "FWONK": "FWONK", "BABA": "BABA", "COMP": "^IXIC"}
 # Report rows whose EPS/price are not in USD per ADR -> keep report price (override would mix currencies)
 NO_PRICE_OVERRIDE = {("etrade", "BABA"), ("ai", "SKHY"), ("screener", "TCOM")}
 # Stock splits after the report date: report EPS / prices / targets are divided by this factor
@@ -61,8 +61,11 @@ def split_adjust(d, k):
 
 PORTFOLIOS = [
     {"id": "orig", "name": "Original watch list", "short": "Watch list",
-     "desc": "The 19 names from the first request (incl. S&P 500 and Nasdaq-100 indices). No IBES/Refinitiv reports → oversold analysis only.",
-     "tickers": bs.DEFAULT_TICKERS, "run": None, "ai_filter": False},
+     "desc": "The 17 single names from the first request. No reports of its own → price-target rows are borrowed from the portfolio that covers each name.",
+     "tickers": [t for t in bs.DEFAULT_TICKERS if t not in ("SPX", "NDX")], "run": None, "ai_filter": False},
+    {"id": "indices", "name": "Market indices", "short": "Indices",
+     "desc": "S&P 500 (SPX), Nasdaq-100 (NDX), Nasdaq Composite (COMP), Dow Jones Industrial Average (DJI). Oversold analysis only — no earnings-based targets for indices.",
+     "tickers": ["SPX", "NDX", "COMP", "DJI"], "run": None, "ai_filter": False},
     {"id": "tipranks", "name": "TipRanks Buy portfolio", "short": "TipRanks Buy",
      "desc": "46 names from the TipRanks Buy portfolio reports (IBES/Refinitiv, Oct-2026). AI chip/infrastructure filter available.",
      "run": "tipranks", "data": "data_new.json", "overrides": "overrides.json", "ai_filter": True},
