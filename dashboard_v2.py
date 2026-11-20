@@ -78,25 +78,21 @@ def combined_html(pf, rows, n_up, n_os, asof):
             px = f"{s['price']:,.2f}" if s else "—"; tgt = up = bear = None; exitpe = "—"; drv = "no IBES/Refinitiv report in this portfolio"; drv_full = drv
         st = status(r) if r else "no report"
         st_style = ("background:#eee" if not r or r["tier"] == 2 else "background:#ddd;color:#555" if r["anomaly"] else "background:#fbe7c6" if r["demoted"] else "background:#dff0d8")
+        if r and r.get("source_pf"): drv_full += f" [report from {r['source_pf']} portfolio]"; st += f" <small>({r['source_pf']})</small>"
         body.append([
-            (x["c_rank"] if x["both"] else "—", "font-weight:bold"), (tl(t), ""), (esc((r or {}).get("company") or "", 28), "font-size:12px"),
+            (x["c_rank"] if x["both"] else "—", "font-weight:bold"), (tl(t), ""), (esc((r or {}).get("company") or "", 24), "font-size:12px"),
             (x.get("up_rank") or "n/r", f"background:{'#d9ead3' if x.get('up_rank') and x['up_rank'] <= max(3, n_up // 4) else ''}"),
             (x.get("os_rank") or "n/a", f"background:{'#f6c9c9' if x.get('os_rank') and x['os_rank'] <= max(3, n_os // 4) else ''}"),
-            (px, ""), (tgt, ""), (pc(up), up_col(up)), (pc(bear), up_col(bear) if bear is not None else ""),
-            (eps_str(r) if r else "—", "white-space:nowrap"), (pc(r.get("g")) if r and r.get("g") is not None else "—", ""),
-            (mu(r.get("pe27")) if r and r.get("pe27") else "—", ""), (exitpe, ""),
-            (pc(r.get("pt_up")) if r and r.get("pt_up") is not None else "—", ""), (st, st_style + ";font-size:12px"),
-            (f"<b>{s['n_flags']}</b>" if s else "—", f"background:{'#f6c9c9' if s and s['n_flags'] >= 7 else '#fbe7c6' if s and s['n_flags'] >= 4 else '#eee'}"),
-            (s["n_turn"] if s else "—", ""), (f"{s['avg_pctile']:.0f}" if s else "—", f"background:{pct_color(s['avg_pctile'])}" if s else ""),
-            (f"{s['tests'][0]['cur']:.0f}" if s else "—", f"background:{pct_color(s['tests'][0]['pctile'])}" if s else ""),
-            (f"{s['tests'][5]['cur']:.0f}" if s else "—", f"background:{pct_color(s['tests'][5]['pctile'])}" if s else ""),
-            (f"{s['dd1y']:.0f}%" if s else "—", ""), (f"<span title='{drv_full}'>{drv}</span>", "font-size:12px;max-width:340px")])
-    hdr = ["Combined #", "Ticker", "Company", "Upside rank", "Oversold rank", "Price today", "Target end-2027", "Upside to target", "Bear end-2027",
-           "EPS 26E / 27E / 28E", "g 27→28", "P/E 27", "Exit P/E", "Sell-side PT", "Status", "Flags /10", "Turn /4", "Avg pctile", "RSI-D", "RSI-W", "DD 1-yr", "Driver / risk"]
+            (f"{px} → {tgt}", "white-space:nowrap"), (pc(up), up_col(up) + ";font-weight:600"), (pc(bear), up_col(bear) if bear is not None else ""),
+            (f"<b>{s['n_flags']}</b> · ↑{s['n_turn']}" if s else "—", f"white-space:nowrap;background:{'#f6c9c9' if s and s['n_flags'] >= 7 else '#fbe7c6' if s and s['n_flags'] >= 4 else '#eee'}"),
+            (f"{s['avg_pctile']:.0f}" if s else "—", f"background:{pct_color(s['avg_pctile'])}" if s else ""),
+            (st, st_style + ";font-size:12px;white-space:nowrap"), (f"<span title='{drv_full}'>{drv}</span>", "font-size:12px;min-width:360px")])
+    hdr = ["Combined #", "Ticker", "Company", "Upside rank", "Oversold rank", "Price → target end-2027", "Upside", "Bear case", "Flags /10 · turn /4", "Avg pctile", "Status", "Driver / risk"]
     intro = (f"<p class='hint'><b>How to read:</b> <i>Upside rank</i> = position by upside to the engine's end-2027 target (2028E EPS × PEG-0.8 exit P/E, 30x cap) among the {n_up} names that are "
              f"rankable on earnings (Tier 1, not ANOMALY). <i>Oversold rank</i> = position by the 10-test checklist (flags, then average percentile, then turn signals) among the {n_os} names with price history. "
              f"<i>Combined #</i> = order by the sum of the two ranks (lower = better on both). Names that cannot be ranked on one dimension are listed after, with n/r (no rankable target) or n/a (no price data). "
-             f"Click a column header to sort, a ticker to drill in. ✂ = exit P/E haircut (×0.8). <sup>X</sup> = 2028E extrapolated, <sup>D</sup> = analyst-adjusted. Prices as of {asof}.</p>")
+             f"<i>Bear case</i> = (2028E − 1 SD) × trough P/E; <i>Flags</i> = oversold tests firing, <i>↑turn</i> = reversal signals; <i>Avg pctile</i> = today's readings vs own 4-yr history (0 = most oversold ever). "
+             f"Full EPS / multiples detail is on the Price targets tab, full indicator detail on the Oversold ranking tab. Click a column header to sort, a ticker to drill in. Prices as of {asof}.</p>")
     return intro + "<div id='fig-scatter' class='fig'></div>" + table_html(hdr, body, "sortable")
 
 
@@ -131,6 +127,11 @@ def targets_html(pf, rows, asof, missing_scan):
     rep_dates = sorted({str(r["report_date"]) for r in rk if r.get("report_date")})
     hair = [r["ticker"] for r in rk if r["haircut"]]
     notes = [f"<b>{r['ticker']}</b>: {r['split_note']}" for r in rk if r.get("split_note")] + [f"<b>{r['ticker']}</b>: {r['currency_note']}" for r in rk if r.get("currency_note")]
+    borrowed = [f"{r['ticker']} ({r['source_pf']})" for r in rk if r.get("source_pf")]
+    if borrowed:
+        no_rep = [x["ticker"] for x in rows if not x["rk"]]
+        notes.append(f"<br><b>This list has no reports of its own</b> — rows are borrowed from the portfolio that covers each name: {', '.join(borrowed)}." +
+                     (f" No report in any portfolio for: {', '.join(no_rep)}." if no_rep else ""))
     basis = (f"<p class='hint'><b>Data basis.</b> Consensus EPS / revenue / sell-side targets from the IBES & Refinitiv reports dated {', '.join(rep_dates)}; "
              f"<b>prices re-set to the latest Yahoo quote ({asof})</b> for every name (so P/E 27, upside and bear % move with the market while the estimates stay at report date). "
              f"Tags: <sup>S</sup> consensus as reported · <sup>X</sup> extrapolated (no FY+2 consensus: 2028E = 2027E + 0.75 × (2027E − 2026E)) · <sup>D</sup> analyst-adjusted (see driver). "
@@ -197,7 +198,8 @@ def stock_target_html(r, pf):
         if r.get(k): txt += f"<p class='hint'>⚠ {H.escape(r[k])}</p>"
     if r.get("business_summary"): txt += f"<h4>Business</h4><p class='hint'>{H.escape(r['business_summary'][:900])}</p>"
     if r.get("earnings_highlights"): txt += f"<h4>Earnings highlights (report)</h4><p class='hint'>{H.escape(str(r['earnings_highlights'])[:900])}</p>"
-    return f"<p>Price-target analysis from the <b>{pf['name']}</b> run (Biotech Ranker engine rules, prices as of today).</p><div class='row'><div class='col'>{tbl}</div><div class='col'>{txt}</div></div>"
+    src = f" (report borrowed from the <b>{r['source_pf']}</b> portfolio run)" if r.get("source_pf") else ""
+    return f"<p>Price-target analysis from the <b>{pf['name']}</b> run{src} (Biotech Ranker engine rules, prices as of today).</p><div class='row'><div class='col'>{tbl}</div><div class='col'>{txt}</div></div>"
 
 
 # ----------------------------------------------------------------------------- portfolio page
@@ -231,6 +233,15 @@ def build():
     meta = []
     for pf in portfolios:
         rows_all = rk[pf["id"]]["rows"] if pf["id"] in rk else None
+        if rows_all is None:
+            # no report run for this list: borrow each ticker's row from the first other portfolio that covers it
+            rows_all = []
+            for t in pf["tickers"]:
+                for o in portfolios:
+                    if o["id"] in rk and t in o["tickers"]:
+                        src = next((r for r in rk[o["id"]]["rows"] if r["ticker"] == t), None)
+                        if src: rows_all.append(dict(src, source_pf=o["short"])); break
+            rows_all = rows_all or None
         ai = sorted(t for t in pf["tickers"] if (rows_all and any(r["ticker"] == t and r["ai_infra"] for r in rows_all)))
         variants = {}
         variants["all"], rows = portfolio_variant(pf, pf["tickers"], rows_all, scan, asof, failed)
