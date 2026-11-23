@@ -67,61 +67,91 @@ def combined_rows(pf, rk_rows, scan):
         ur, orr = x.get("up_rank"), x.get("os_rank")
         x["both"] = ur is not None and orr is not None
         x["combo"] = (ur + orr) if x["both"] else 10 ** 6 + (orr if orr else 10 ** 5) + (0 if ur else 10 ** 4)
+    # analyst 12-month price-target basis: every name with a consensus PT is rankable (no anomaly exclusion)
+    ptr = sorted([x for x in rows if x["rk"] and x["rk"].get("pt_up") is not None], key=lambda x: -x["rk"]["pt_up"])
+    for i, x in enumerate(ptr, 1): x["up_rank_pt"] = i
+    for x in rows:
+        ur, orr = x.get("up_rank_pt"), x.get("os_rank")
+        x["both_pt"] = ur is not None and orr is not None
+        x["combo_pt"] = (ur + orr) if x["both_pt"] else 10 ** 6 + (orr if orr else 10 ** 5) + (0 if ur else 10 ** 4)
+    rows.sort(key=lambda x: (x["combo_pt"], -(x["rk"]["pt_up"] if x["rk"] and x.get("rk", {}).get("pt_up") is not None else -99)))
+    for i, x in enumerate(rows, 1): x["c_rank_pt"] = i
     rows.sort(key=lambda x: (x["combo"], -(x["rk"]["up27"] if x["rk"] and x["rk"].get("up27") is not None else -99)))
     for i, x in enumerate(rows, 1): x["c_rank"] = i
     return rows, n_up, n_os
 
 
-def combined_html(pf, rows, n_up, n_os, asof):
+def combined_html(pf, rows, n_up, n_os, asof, basis="eng"):
+    pt = basis == "pt"
+    sfx = "_pt" if pt else ""
+    n_rk = sum(1 for x in rows if x.get("up_rank_pt")) if pt else n_up
     body = []
-    for x in rows:
+    for x in sorted(rows, key=lambda x: x["c_rank" + sfx]):
         r, s, t = x["rk"], x["sc"], x["ticker"]
         if r:
             px = f"{r['price']:,.2f}" + ("" if r["price_note"] == "override" else " <small>(report)</small>")
-            tgt = f"<b>{mn(r.get('target27'))}</b>" if r.get("target27") else "—"
-            up = r.get("up27"); bear = r.get("bear_up")
-            exitpe = (mu(r.get("exit_pe")) + (" ✂" if r["haircut"] else "")) if r.get("exit_pe") else "—"
+            if pt:
+                tgt = f"<b>{mn(r.get('pt_mean'))}</b>" if r.get("pt_mean") else "—"
+                up = r.get("pt_up"); bear = None
+            else:
+                tgt = f"<b>{mn(r.get('target27'))}</b>" if r.get("target27") else "—"
+                up = r.get("up27"); bear = r.get("bear_up")
             drv = esc(r.get("driver") or r.get("haircut_reason") or "", 110)
             drv_full = H.escape((r.get("driver") or "") + ((" | Haircut: " + r["haircut_reason"]) if r.get("haircut_reason") else ""))
         else:
-            px = f"{s['price']:,.2f}" if s else "—"; tgt = up = bear = None; exitpe = "—"; drv = "no IBES/Refinitiv report for this name (index or uncovered)"; drv_full = drv
+            px = f"{s['price']:,.2f}" if s else "—"; tgt = up = bear = None; drv = "no IBES/Refinitiv report for this name (index or uncovered)"; drv_full = drv
         st = status(r) if r else "no report"
         st_style = ("background:#eee" if not r or r["tier"] == 2 else "background:#ddd;color:#555" if r["anomaly"] else "background:#fbe7c6" if r["demoted"] else "background:#dff0d8")
         if r and r.get("source_pf"): drv_full += f" [report from {r['source_pf']} portfolio]"; st += f" <small>({r['source_pf']})</small>"
+        ur = x.get("up_rank" + sfx)
+        if pt:
+            extra = (f"{r.get('pt_n') or '?'} analysts · {esc(r.get('rec') or '—', 14)}" if r and r.get("pt_mean") else "—", "font-size:12px;white-space:nowrap")
+        else:
+            extra = (pc(bear), up_col(bear) if bear is not None else "")
         body.append([
-            (x["c_rank"] if x["both"] else "—", "font-weight:bold"), (tl(t), ""), (esc(name_of(t, r), 28), "font-size:12px"),
-            (x.get("up_rank") or "n/r", f"background:{'#d9ead3' if x.get('up_rank') and x['up_rank'] <= max(3, n_up // 4) else ''}"),
+            (x["c_rank" + sfx] if x["both" + sfx] else "—", "font-weight:bold"), (tl(t), ""), (esc(name_of(t, r), 28), "font-size:12px"),
+            (ur or "n/r", f"background:{'#d9ead3' if ur and ur <= max(3, n_rk // 4) else ''}"),
             (x.get("os_rank") or "n/a", f"background:{'#f6c9c9' if x.get('os_rank') and x['os_rank'] <= max(3, n_os // 4) else ''}"),
-            (f"{px} → {tgt}" if r else px, "white-space:nowrap"), (pc(up), up_col(up) + ";font-weight:600"), (pc(bear), up_col(bear) if bear is not None else ""),
+            (f"{px} → {tgt}" if r else px, "white-space:nowrap"), (pc(up), up_col(up) + ";font-weight:600"), extra,
             (f"<b>{s['n_flags']}</b> · ↑{s['n_turn']}" if s else "—", f"white-space:nowrap;background:{'#f6c9c9' if s and s['n_flags'] >= 7 else '#fbe7c6' if s and s['n_flags'] >= 4 else '#eee'}"),
             (f"{s['avg_pctile']:.0f}" if s else "—", f"background:{pct_color(s['avg_pctile'])}" if s else ""),
             (st, st_style + ";font-size:12px;white-space:nowrap"), (f"<span title='{drv_full}'>{drv}</span>", "font-size:12px;min-width:360px")])
-    hdr = ["Combined #", "Ticker", "Company", "Upside rank", "Oversold rank", "Price → target end-2027", "Upside", "Bear case", "Flags /10 · turn /4", "Avg pctile", "Status", "Driver / risk"]
-    intro = (f"<p class='hint'><b>How to read:</b> <i>Upside rank</i> = position by upside to the engine's end-2027 target (2028E EPS × PEG-0.8 exit P/E, 30x cap) among the {n_up} names that are "
-             f"rankable on earnings (Tier 1, not ANOMALY). <i>Oversold rank</i> = position by the 10-test checklist (flags, then average percentile, then turn signals) among the {n_os} names with price history. "
+    if pt:
+        hdr = ["Combined #", "Ticker", "Company", "PT upside rank", "Oversold rank", "Price → analyst 12-mo PT", "Upside to PT", "Analysts · rating", "Flags /10 · turn /4", "Avg pctile", "Status", "Driver / risk"]
+        basis_txt = (f"<i>PT upside rank</i> = position by upside to the analyst consensus 12-Month Price Target (mean, from the IBES / Refinitiv reports) among the {n_rk} names that have one "
+                     f"(unlike the engine basis, ANOMALY and demoted names are included because the PT is not built from our EPS rules). ")
+    else:
+        hdr = ["Combined #", "Ticker", "Company", "Upside rank", "Oversold rank", "Price → target end-2027", "Upside", "Bear case", "Flags /10 · turn /4", "Avg pctile", "Status", "Driver / risk"]
+        basis_txt = (f"<i>Upside rank</i> = position by upside to the engine's end-2027 target (2028E EPS × PEG-0.8 exit P/E, 30x cap) among the {n_up} names that are "
+                     f"rankable on earnings (Tier 1, not ANOMALY). ")
+    intro = (f"<p class='hint'><b>How to read:</b> {basis_txt}<i>Oversold rank</i> = position by the 10-test checklist (flags, then average percentile, then turn signals) among the {n_os} names with price history. "
              f"<i>Combined #</i> = order by the sum of the two ranks (lower = better on both). Names that cannot be ranked on one dimension are listed after, with n/r (no rankable target) or n/a (no price data). "
-             f"<i>Bear case</i> = (2028E − 1 SD) × trough P/E; <i>Flags</i> = oversold tests firing, <i>↑turn</i> = reversal signals; <i>Avg pctile</i> = today's readings vs own 4-yr history (0 = most oversold ever). "
+             f"{'' if pt else '<i>Bear case</i> = (2028E − 1 SD) × trough P/E; '}<i>Flags</i> = oversold tests firing, <i>↑turn</i> = reversal signals; <i>Avg pctile</i> = today's readings vs own 4-yr history (0 = most oversold ever). "
              f"Full EPS / multiples detail is on the Price targets tab, full indicator detail on the Oversold ranking tab. Click a column header to sort, a ticker to drill in. Prices as of {asof}.</p>")
     return intro + "<div id='fig-scatter' class='fig'></div>" + table_html(hdr, body, "sortable")
 
 
-def fig_scatter(rows, title):
-    pts = [x for x in rows if x["both"]]
+def fig_scatter(rows, title, basis="eng"):
+    pt = basis == "pt"; sfx = "_pt" if pt else ""
+    pts = [x for x in rows if x["both" + sfx]]
     if not pts: return go.Figure(layout=dict(title="No names rankable on both dimensions", height=300))
-    ys = [min(x["rk"]["up27"] * 100, 400) for x in pts]
-    col = ["#e8a33c" if x["rk"]["demoted"] else "#2b7bba" for x in pts]
-    hover = [f"<b>{x['ticker']}</b> {x['rk'].get('company') or ''}<br>Target end-2027 {mn(x['rk']['target27'])} ({pc(x['rk']['up27'])}{' – clipped at +400%' if x['rk']['up27'] > 4 else ''})<br>"
-             f"Bear {pc(x['rk'].get('bear_up'))} · {status(x['rk'])}<br>Oversold flags {x['sc']['n_flags']}/10 · avg pctile {x['sc']['avg_pctile']:.0f} · turn {x['sc']['n_turn']}/4<br>"
-             f"Upside rank {x['up_rank']} · Oversold rank {x['os_rank']} · Combined #{x['c_rank']}" for x in pts]
+    U = (lambda x: x["rk"]["pt_up"]) if pt else (lambda x: x["rk"]["up27"])
+    ys = [min(U(x) * 100, 400) for x in pts]
+    col = ["#e8a33c" if (x["rk"].get("demoted") and not pt) else "#2b7bba" for x in pts]
+    lbl = "Analyst 12-mo PT" if pt else "Target end-2027"
+    val = (lambda x: x["rk"]["pt_mean"]) if pt else (lambda x: x["rk"]["target27"])
+    hover = [f"<b>{x['ticker']}</b> {x['rk'].get('company') or ''}<br>{lbl} {mn(val(x))} ({pc(U(x))}{' – clipped at +400%' if U(x) > 4 else ''})<br>"
+             f"{status(x['rk'])}<br>Oversold flags {x['sc']['n_flags']}/10 · avg pctile {x['sc']['avg_pctile']:.0f} · turn {x['sc']['n_turn']}/4<br>"
+             f"Upside rank {x['up_rank' + sfx]} · Oversold rank {x['os_rank']} · Combined #{x['c_rank' + sfx]}" for x in pts]
     fig = go.Figure(go.Scatter(x=[x["sc"]["avg_pctile"] for x in pts], y=ys, mode="markers+text", text=[x["ticker"] for x in pts], textposition="top center",
                                textfont=dict(size=10), hovertext=hover, hoverinfo="text",
                                marker=dict(size=[8 + 2 * x["sc"]["n_flags"] for x in pts], color=col, line=dict(width=1, color="#333"), opacity=0.85)))
     fig.add_vline(x=20, line_dash="dot", line_color="#c82828"); fig.add_hline(y=50, line_dash="dot", line_color="#2a7a2a")
     fig.add_annotation(x=99, y=395, text="more oversold (own-history percentile) ▶ · ▲ more upside — the top-right corner is the sweet spot", showarrow=False, xanchor="left", font=dict(size=11, color="#555"))
     fig.update_layout(title=title, height=560, xaxis=dict(title="Average indicator percentile vs own 4-yr history (0 = most oversold ever)", autorange="reversed", range=[100, 0]),
-                      yaxis=dict(title="Upside to end-2027 target (%, clipped at 400)"), margin=dict(t=60, b=50))
+                      yaxis=dict(title="Upside to analyst 12-mo PT (%, clipped at 400)" if pt else "Upside to end-2027 target (%, clipped at 400)"), margin=dict(t=60, b=50))
     fig.update_layout(annotations=fig.layout.annotations + (dict(x=0.99, y=0.02, xref="paper", yref="paper", showarrow=False, align="right", font=dict(size=11),
-                                                                  text="marker size = oversold flags · blue = Tier 1 · orange = demoted (bear < −30%)<br>click a marker to drill into the stock"),))
+                                                                  text="marker size = oversold flags · blue = Tier 1" + ("" if pt else " · orange = demoted (bear < −30%)") + "<br>click a marker to drill into the stock"),))
     return fig
 
 
@@ -217,8 +247,10 @@ def portfolio_variant(pf, tickers, rk_rows, scan, asof, failed):
     rows, n_up, n_os = combined_rows(sub, rk_rows, scan)
     res = [scan[t] for t in tickers if t in scan]; res.sort(key=lambda r: (-r["n_flags"], r["avg_pctile"], -r["n_turn"]))
     missing = [t for t in tickers if t not in scan]
-    v = {"order": [r["ticker"] for r in res], "combined": combined_html(sub, rows, n_up, n_os, asof), "targets": targets_html(sub, rows, asof, missing),
-         "figs": {"scatter": fj(fig_scatter(rows, f"{pf['name']} — upside to end-2027 target vs oversold depth"))}}
+    v = {"order": [r["ticker"] for r in res], "combined": combined_html(sub, rows, n_up, n_os, asof), "combined_pt": combined_html(sub, rows, n_up, n_os, asof, "pt"),
+         "targets": targets_html(sub, rows, asof, missing),
+         "figs": {"scatter": fj(fig_scatter(rows, f"{pf['name']} — upside to end-2027 target vs oversold depth")),
+                  "scatter_pt": fj(fig_scatter(rows, f"{pf['name']} — upside to analyst 12-month PT vs oversold depth", "pt"))}}
     if res:
         names = {x["ticker"]: name_of(x["ticker"], x["rk"]) for x in rows}
         v["ranking"] = d1.ranking_html(res, names) + (f"<p class='hint'>No Yahoo price history for: {', '.join(missing)}.</p>" if missing else "")
@@ -306,13 +338,14 @@ def write_shell(meta, asof):
     .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:16px} .card{background:#fff;border:1px solid #dde;border-radius:10px;padding:14px 18px;cursor:pointer;transition:box-shadow .15s}
     .card:hover{box-shadow:0 4px 14px rgba(0,0,0,.12)} .card h3{margin:0 0 6px} .card.sel{border:2px solid #2b7bba} .card .st{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;margin:8px 0} .card .st b{font-size:18px;display:block}
     .card .lk{font-size:12px;color:#555} .badge{display:inline-block;background:#fff3cd;border:1px solid #e0c97a;border-radius:4px;padding:1px 6px;font-size:11px;margin-left:6px}
+    .basis{margin:6px 0 10px;font-size:14px} .bt{border:1px solid #2b7bba;background:#fff;color:#2b7bba;padding:5px 12px;cursor:pointer;font-size:13px} .bt:first-of-type{border-radius:6px 0 0 6px} .bt:last-of-type{border-radius:0 6px 6px 0;border-left:0} .bt.on{background:#2b7bba;color:#fff}
     #loading{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#1f2f44;color:#fff;padding:14px 26px;border-radius:10px;display:none;z-index:50}
     """
     js = r"""
 const META = __META__;
 const TABS = {portfolios:'Portfolios', combined:'Combined ranking', targets:'Price targets', ranking:'Oversold ranking', heat:'Heat-map', stock:'Stock detail', method:'Methodology'};
 const SUBS = {readings:'Readings', charts:'Charts', history:'Episode history', lows:'Swing lows', target:'Price target'};
-let S = {pf:'tipranks', tab:'portfolios', ticker:null, sub:'readings', noai:false}; let stack=[]; const drawn={}; const P={}, ST={};
+let S = {pf:'tipranks', tab:'portfolios', ticker:null, sub:'readings', noai:false, basis:'eng'}; let stack=[]; const drawn={}; const P={}, ST={};
 const $ = id=>document.getElementById(id);
 function plot(id, fig){ const el=$(id); if(!el||!fig) return null; Plotly.react(el, fig.data, fig.layout, {displaylogo:false, responsive:true}); return el; }
 async function fetchJ(u){ $('loading').style.display='block'; try{ const r=await fetch(u+(u.includes('?')?'&':'?')+'v='+encodeURIComponent(META.build), {cache:'no-cache'}); if(!r.ok) throw new Error(u); return await r.json(); } finally{ $('loading').style.display='none'; } }
@@ -337,9 +370,9 @@ async function render(){
   $('pfsel').value=S.pf; $('pfname').textContent=m.name; $('aitog').classList.toggle('off', !p.ai_filter); $('aichk').checked=S.noai;
   const back=$('back'); back.classList.toggle('show', stack.length>0);
   if(stack.length){ const q=stack[stack.length-1]; back.textContent='← Back to '+TABS[q.tab]+(q.tab==='stock'?' ('+q.ticker+')':'')+(q.pf!==S.pf?' · '+META.portfolios.find(x=>x.id===q.pf).short:''); }
-  const key=S.pf+(S.noai?'/noai':'');
+  const key=S.pf+(S.noai?'/noai':'')+'/'+S.basis;
   if(S.tab==='portfolios') cards();
-  if(S.tab==='combined' && drawn.combined!==key){ $('combined-body').innerHTML=v.combined; sortable($('combined-body')); const el=plot('fig-scatter', v.figs.scatter); if(el) el.on('plotly_click', e=>go('stock',{ticker:e.points[0].text, sub:'readings'})); drawn.combined=key; }
+  if(S.tab==='combined' && drawn.combined!==key){ const pt=S.basis==='pt'; $('basis-eng').classList.toggle('on',!pt); $('basis-pt').classList.toggle('on',pt); $('combined-body').innerHTML=pt?v.combined_pt:v.combined; sortable($('combined-body')); const el=plot('fig-scatter', pt?v.figs.scatter_pt:v.figs.scatter); if(el) el.on('plotly_click', e=>go('stock',{ticker:e.points[0].text, sub:'readings'})); drawn.combined=key; }
   if(S.tab==='targets' && drawn.targets!==key){ $('targets-body').innerHTML=v.targets; sortable($('targets-body')); drawn.targets=key; }
   if(S.tab==='ranking' && drawn.ranking!==key){ $('ranking-body').innerHTML=v.ranking; sortable($('ranking-body')); const el=plot('fig-flags', v.figs.flags); if(el) el.on('plotly_click', e=>go('stock',{ticker:e.points[0].x})); drawn.ranking=key; }
   if(S.tab==='heat' && drawn.heat!==key){ const el=plot('fig-heat', v.figs.heat); if(el) el.on('plotly_click', e=>go('stock',{ticker:e.points[0].y})); drawn.heat=key; }
@@ -372,6 +405,7 @@ document.querySelectorAll('nav.sub button').forEach(b=>b.onclick=()=>{ S.sub=b.d
 $('tsel').onchange=e=>{ S.ticker=e.target.value; render(); };
 $('pfsel').onchange=e=>{ go(S.tab==='portfolios'?'combined':S.tab, {pf:e.target.value, noai:false}); };
 $('aichk').onchange=e=>{ S.noai=e.target.checked; render(); };
+$('basis-eng').onclick=()=>{ S.basis='eng'; render(); }; $('basis-pt').onclick=()=>{ S.basis='pt'; render(); };
 $('back').onclick=back;
 let lastHash=null;
 (function init(){ $('pfsel').innerHTML=META.portfolios.map(m=>`<option value='${m.id}'>${m.name}</option>`).join('');
@@ -388,7 +422,7 @@ window.addEventListener('hashchange', ()=>{ if(location.hash!==lastHash){ fromHa
 <div class='toolbar'><button id='back'>← Back</button><span class='hint'>Portfolio: <b id='pfname'></b></span><label class='aitog' id='aitog'><input type='checkbox' id='aichk'> Hide AI chip / infrastructure stocks</label></div>
 <div id='loading'>loading…</div>
 <div id='pane-portfolios' class='pane'><h2>Choose a portfolio</h2><p class='hint'>Each card is one stock universe. Every other tab shows the selected portfolio only (change it any time from the header). Cards summarise the two ranking dimensions: upside to the engine's end-2027 price target (IBES/Refinitiv consensus) and oversold depth (10-test technical checklist vs the stock's own 4-year history).</p><div class='cards' id='cards'></div></div>
-<div id='pane-combined' class='pane'><h2>Combined ranking — end-2027 target upside × oversold depth</h2><div id='combined-body'></div></div>
+<div id='pane-combined' class='pane'><h2>Combined ranking — target upside × oversold depth</h2><div class='basis'>Target basis: <button id='basis-eng' class='bt on'>Engine end-2027 target</button><button id='basis-pt' class='bt'>Analyst 12-month price target</button></div><div id='combined-body'></div></div>
 <div id='pane-targets' class='pane'><h2>Price-target analysis (Biotech Ranker engine, re-priced today)</h2><div id='targets-body'></div></div>
 <div id='pane-ranking' class='pane'><h2>Oversold ranking – most oversold to least</h2><div id='ranking-body'></div><div id='fig-flags' class='fig'></div></div>
 <div id='pane-heat' class='pane'><h2>Percentile heat-map</h2><p class='hint'>Each cell = today's indicator reading as a percentile of its own {PCTL_YEARS}-yr history (0 = most oversold ever). ✅ flag firing now · 🟡 fired in recent window. Click a cell to drill into the stock.</p><div id='fig-heat' class='fig'></div></div>

@@ -34,14 +34,14 @@ AI_INFRA = {
     "ALAB", "AMAT", "ANET", "AXTI", "BE", "CBRS", "CEG", "CIEN", "CLS", "COHR", "CRDO", "CRWV", "DY", "EQIX", "ETN", "FLEX",
     "FN", "GNRC", "HUBB", "IREN", "JCI", "LITE", "LRCX", "MOD", "MPWR", "MTSI", "MU", "NBIS", "NVT", "OKLO", "POET", "PWR",
     "SKHY", "SNDK", "STX", "TT", "VST", "WDC",
-    # Fidelity screener (11/22): semis, semi-cap/materials, networking/servers/optics, connectors, data-centre power
+    # US growth screener (11/22): semis, semi-cap/materials, networking/servers/optics, connectors, data-centre power
     "INTC", "TXN", "ADI", "KLAC", "NXPI", "ON", "GFS", "ENTG", "Q", "GLW", "APH", "TEL", "JBL", "HPE", "CSCO", "GEV", "NRG", "KEYS",
 }
 # Yahoo symbols that differ from the report ticker
 YSYM = {"SKHY": "000660.KS", "IFNNY": "IFNNY", "FWONK": "FWONK", "BABA": "BABA", "COMP": "^IXIC"}
 # Report rows whose EPS/price are not in USD per ADR -> keep report price (override would mix currencies)
 NO_PRICE_OVERRIDE = {("etrade", "BABA"), ("ai", "SKHY"), ("screener", "TCOM"),
-                    ("fidelity", "TD"), ("fidelity", "BMO"), ("fidelity", "BNS"), ("fidelity", "CM"), ("fidelity", "GFL"), ("fidelity", "BAP")}
+                    ("growth", "TD"), ("growth", "BMO"), ("growth", "BNS"), ("growth", "CM"), ("growth", "GFL"), ("growth", "BAP")}
 # Stock splits after the report date: report EPS / prices / targets are divided by this factor
 SPLIT_ADJ = {("ai", "SNDK"): 8.0}
 
@@ -84,9 +84,9 @@ PORTFOLIOS = [
     {"id": "screener", "name": "Mega/Large-cap Strong Buy screener", "short": "Mega/Large-cap",
      "desc": "84 names from the TipRanks Mega/Large-cap Strong Buy screener (reports 11/05–11/06/26; 21 names had no report). ANOMALY tags carried over.",
      "run": "tipranks-rest", "data": "data.json", "overrides": "overrides.json", "ai_filter": True},
-    {"id": "fidelity", "name": "Fidelity screener (3-5yr EPS growth >12%)", "short": "Fidelity screener",
-     "desc": "155 US-listed large/mid-cap names from the Fidelity screener of 11/22/26 (projected 3-5 yr EPS growth > 12%) with IBES/Refinitiv reports dated 11/22/26 (VYLR: no report available). AI chip/infrastructure filter available.",
-     "run": "fidelity-1122", "data": "data.json", "overrides": "overrides.json", "ai_filter": True},
+    {"id": "growth", "name": "US growth screener (3-5yr EPS growth >12%)", "short": "US growth screener",
+     "desc": "155 US-listed large/mid-cap names from the 11/22/26 growth screen (projected 3-5 yr EPS growth > 12%) with IBES/Refinitiv reports dated 11/22/26 (VYLR: no report available). AI chip/infrastructure filter available.",
+     "run": "growth-1122", "data": "data.json", "overrides": "overrides.json", "ai_filter": True},
 ]
 
 
