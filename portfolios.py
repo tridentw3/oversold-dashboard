@@ -34,11 +34,14 @@ AI_INFRA = {
     "ALAB", "AMAT", "ANET", "AXTI", "BE", "CBRS", "CEG", "CIEN", "CLS", "COHR", "CRDO", "CRWV", "DY", "EQIX", "ETN", "FLEX",
     "FN", "GNRC", "HUBB", "IREN", "JCI", "LITE", "LRCX", "MOD", "MPWR", "MTSI", "MU", "NBIS", "NVT", "OKLO", "POET", "PWR",
     "SKHY", "SNDK", "STX", "TT", "VST", "WDC",
+    # Fidelity screener (11/22): semis, semi-cap/materials, networking/servers/optics, connectors, data-centre power
+    "INTC", "TXN", "ADI", "KLAC", "NXPI", "ON", "GFS", "ENTG", "Q", "GLW", "APH", "TEL", "JBL", "HPE", "CSCO", "GEV", "NRG", "KEYS",
 }
 # Yahoo symbols that differ from the report ticker
 YSYM = {"SKHY": "000660.KS", "IFNNY": "IFNNY", "FWONK": "FWONK", "BABA": "BABA", "COMP": "^IXIC"}
 # Report rows whose EPS/price are not in USD per ADR -> keep report price (override would mix currencies)
-NO_PRICE_OVERRIDE = {("etrade", "BABA"), ("ai", "SKHY"), ("screener", "TCOM")}
+NO_PRICE_OVERRIDE = {("etrade", "BABA"), ("ai", "SKHY"), ("screener", "TCOM"),
+                    ("fidelity", "TD"), ("fidelity", "BMO"), ("fidelity", "BNS"), ("fidelity", "CM"), ("fidelity", "GFL"), ("fidelity", "BAP")}
 # Stock splits after the report date: report EPS / prices / targets are divided by this factor
 SPLIT_ADJ = {("ai", "SNDK"): 8.0}
 
@@ -81,6 +84,9 @@ PORTFOLIOS = [
     {"id": "screener", "name": "Mega/Large-cap Strong Buy screener", "short": "Mega/Large-cap",
      "desc": "84 names from the TipRanks Mega/Large-cap Strong Buy screener (reports 11/05–11/06/26; 21 names had no report). ANOMALY tags carried over.",
      "run": "tipranks-rest", "data": "data.json", "overrides": "overrides.json", "ai_filter": True},
+    {"id": "fidelity", "name": "Fidelity screener (3-5yr EPS growth >12%)", "short": "Fidelity screener",
+     "desc": "155 US-listed large/mid-cap names from the Fidelity screener of 11/22/26 (projected 3-5 yr EPS growth > 12%) with IBES/Refinitiv reports dated 11/22/26 (VYLR: no report available). AI chip/infrastructure filter available.",
+     "run": "fidelity-1122", "data": "data.json", "overrides": "overrides.json", "ai_filter": True},
 ]
 
 
@@ -136,7 +142,7 @@ def rerun_rankings(prices, price_asof):
             row["price_asof"] = price_asof.get(row["ticker"]) if row["price_note"] == "override" else row["price_note"]
             row["report_price"] = data[row["ticker"]]["price"]; row["report_date"] = data[row["ticker"]].get("price_date")
             row["split_note"] = data[row["ticker"]].get("split_note")
-            row["currency_note"] = ("Report is the HK line (local currency); ratios valid, price kept at report level — not re-priced"
+            row["currency_note"] = ("Report is the local-currency line (HK/CAD/PEN); ratios valid, price kept at report level — not re-priced"
                                     if (p["id"], row["ticker"]) in NO_PRICE_OVERRIDE else None)
         p["tickers"] = [row["ticker"] for row in rk["rows"]]
         results[p["id"]] = {"rows": rk["rows"], "missing_price": missing, "dir": out}
